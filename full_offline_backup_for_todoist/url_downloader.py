@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 import urllib.request
 import urllib.parse
 import http.cookiejar
+import json
 from typing import cast, Dict, Optional
 from .tracer import Tracer
 
@@ -38,8 +39,8 @@ class TodoistAuthURLDownloader(URLDownloader):
     """ Implementation of a class to download the contents of an URL through URLLib,
         authenticating before with Todoist's servers using a username/password """
 
-    URL_SHOWLOGIN = 'https://todoist.com/Users/showLogin'
-    URL_POSTLOGIN = 'https://todoist.com/Users/login'
+    URL_SHOWLOGIN = 'https://todoist.com/API/ping'
+    URL_POSTLOGIN = 'https://todoist.com/API/v8.7/user/login'
 
     LOGIN_PARAM_CSRF = "csrf"
     LOGIN_PARAM_EMAIL = "email"
@@ -71,19 +72,19 @@ class TodoistAuthURLDownloader(URLDownloader):
 
             self.__tracer.trace("Auth Step 2: Building login request params")
 
-            # Build the parameters (CSRF, email and password) for the login POST request
-            csrf_value = next(c.value for c in cookiejar
-                              if c.name == TodoistAuthURLDownloader.LOGIN_PARAM_CSRF)
-            params = {
-                TodoistAuthURLDownloader.LOGIN_PARAM_CSRF: csrf_value,
-                TodoistAuthURLDownloader.LOGIN_PARAM_EMAIL: self.__email,
-                TodoistAuthURLDownloader.LOGIN_PARAM_PASSWORD: self.__password}
-            params_str = urllib.parse.urlencode(params).encode('utf-8')
+            # Build the parameters (email and password) for the login POST request
+            jsondata = json.dumps({
+                "email": self.__email,
+                "password": self.__password,
+                "web_session": True,
+            }).encode('utf-8')
 
             self.__tracer.trace("Auth Step 3: Send login request")
 
             # Send the login POST request, which will give us our identifier cookie
-            with self.__opener.open(TodoistAuthURLDownloader.URL_POSTLOGIN, params_str) as _:
+            req = urllib.request.Request(TodoistAuthURLDownloader.URL_POSTLOGIN, data=jsondata,
+                headers={'Content-Type': 'application/json'})
+            with self.__opener.open(req) as _:
                 pass
 
             self.__tracer.trace("Auth completed")
